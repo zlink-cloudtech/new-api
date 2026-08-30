@@ -1,0 +1,50 @@
+1. new-api has been deployed. Get the application URL:
+
+{{- if .Values.gateway.enabled }}
+  Gateway API HTTPRoute is enabled.
+  {{- if .Values.gateway.hostnames }}
+  The application is accessible at:
+  {{- range .Values.gateway.hostnames }}
+    http{{ if $.Values.ingress.tls }}s{{ end }}://{{ . }}
+  {{- end }}
+  {{- else }}
+  No hostnames configured — HTTPRoute will match all hostnames on the attached Gateway.
+  Ensure the Gateway "{{ (index .Values.gateway.parentRefs 0).name }}" exists and has a listener configured.
+  {{- end }}
+
+{{- else if .Values.ingress.enabled }}
+  Ingress is enabled. The application is accessible at:
+  {{- range $host := .Values.ingress.hosts }}
+    {{- range .paths }}
+    http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+    {{- end }}
+  {{- end }}
+
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "new-api.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+
+{{- else if contains "LoadBalancer" .Values.service.type }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+  Watch its status with:
+    kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "new-api.fullname" . }}
+
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "new-api.fullname" . }} --template "{{"{{range (index .status.loadBalancer.ingress 0)}}{{.}}{{end}}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.port }}
+
+{{- else }}
+  Port-forward to access locally:
+    kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "new-api.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  Then open: http://127.0.0.1:{{ .Values.service.port }}
+{{- end }}
+
+2. Default admin credentials (first-time setup only):
+   Username: root
+   Password: 123456
+   ⚠️  Change these immediately after first login!
+
+3. Configuration tips:
+   - For production, set secrets.sessionSecret to a random 32-byte hex string
+   - For multi-replica deployments, configure a shared SQL_DSN and REDIS_CONN_STRING
+   - See values.yaml for the full list of configuration options
