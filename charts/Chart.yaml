@@ -1,0 +1,16 @@
+apiVersion: v2
+name: new-api
+description: A Helm chart for new-api — AI API gateway supporting 40+ upstream providers
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - ai
+  - api-gateway
+  - llm
+  - openai
+home: https://github.com/QuantumNous/new-api
+sources:
+  - https://github.com/QuantumNous/new-api
+maintainers:
+  - name: QuantumNous

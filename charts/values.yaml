@@ -1,0 +1,205 @@
+# Default values for new-api Helm chart.
+
+replicaCount: 1
+
+image:
+  repository: calciumion/new-api
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Automatically mount a ServiceAccount's API credentials
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 3000
+
+# ---------------------------------------------------------------------------
+# Gateway API — HTTPRoute (Kubernetes Gateway API v1)
+# ---------------------------------------------------------------------------
+# Use this section when your cluster has the Gateway API CRDs installed
+# (gateway.networking.k8s.io/v1) and a compatible gateway controller
+# (e.g. Envoy Gateway, Istio, Cilium, Traefik v3, etc.)
+gateway:
+  enabled: false
+  # parentRefs defines which Gateway this HTTPRoute should attach to.
+  # The Gateway must exist before deploying this chart.
+  parentRefs:
+    - name: ""          # Required: name of the Gateway resource
+      namespace: ""     # Optional: namespace of the Gateway (defaults to same namespace)
+      # sectionName: ""  # Optional: listener name within the Gateway
+  # hostnames specifies the virtual hostnames the HTTPRoute should match.
+  # Leave empty to match all hostnames on the attached Gateway.
+  hostnames: []
+    # - new-api.example.com
+  # Additional annotations for the HTTPRoute resource
+  annotations: {}
+  # Optional TLS: reference a ReferenceGrant-permitted secret for TLS termination
+  # at the Gateway level (configure TLS on the Gateway listener, not here).
+  # timeout settings (Gateway API v1.1+)
+  timeouts:
+    request: "60s"
+    backendRequest: "60s"
+  # Path matching rules — sensible default routes all traffic to new-api
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      # backendRefs are auto-generated from the service name; override if needed
+      # backendRefs: []
+
+# ---------------------------------------------------------------------------
+# Traditional Ingress (alternative to Gateway API)
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: new-api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: new-api-tls
+  #    hosts:
+  #      - new-api.example.com
+
+# ---------------------------------------------------------------------------
+# Application configuration
+# ---------------------------------------------------------------------------
+config:
+  # Timezone
+  tz: "Asia/Shanghai"
+  # Enable structured error logs
+  errorLogEnabled: true
+  # Enable batch quota updates (recommended for performance)
+  batchUpdateEnabled: true
+  # Node name — used in audit logs; set a unique value per replica when scaling
+  nodeName: ""
+  # Streaming timeout in seconds (default: 120)
+  streamingTimeout: ""
+  # Sync frequency for database replication in seconds (leave empty to disable)
+  syncFrequency: ""
+  # Additional arbitrary env vars to inject into the container
+  # extraEnvVars:
+  #   - name: GOOGLE_ANALYTICS_ID
+  #     value: "G-XXXXXXXXXX"
+  extraEnvVars: []
+
+# ---------------------------------------------------------------------------
+# Secrets — sensitive values injected as environment variables
+# ---------------------------------------------------------------------------
+# All values here are stored in a Kubernetes Secret.
+# You may also reference an existing external secret via existingSecret.
+secrets:
+  # Session secret — REQUIRED for multi-replica deployments.
+  # Generate with: openssl rand -hex 32
+  sessionSecret: ""
+
+  # Database DSN. Leave empty to use the embedded SQLite database.
+  # PostgreSQL: postgresql://user:password@host:5432/new-api
+  # MySQL:      user:password@tcp(host:3306)/new-api
+  sqlDsn: ""
+
+  # Redis connection string (optional, but recommended for production).
+  # Format: redis://:password@host:6379
+  redisConnString: ""
+
+# Reference an existing secret instead of creating one.
+# The secret must contain the same keys as the secrets section above:
+#   SESSION_SECRET, SQL_DSN, REDIS_CONN_STRING
+existingSecret: ""
+
+# ---------------------------------------------------------------------------
+# Persistence — /data volume
+# ---------------------------------------------------------------------------
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+  # Annotations for the PVC
+  annotations: {}
+  # Use an existing PVC instead of creating one
+  existingClaim: ""
+
+# ---------------------------------------------------------------------------
+# Resources
+# ---------------------------------------------------------------------------
+resources: {}
+  # limits:
+  #   cpu: 500m
+  #   memory: 512Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+# ---------------------------------------------------------------------------
+# Autoscaling (HPA)
+# ---------------------------------------------------------------------------
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+# ---------------------------------------------------------------------------
+# Scheduling
+# ---------------------------------------------------------------------------
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ---------------------------------------------------------------------------
+# Liveness / Readiness probes
+# ---------------------------------------------------------------------------
+livenessProbe:
+  httpGet:
+    path: /api/status
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/status
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3

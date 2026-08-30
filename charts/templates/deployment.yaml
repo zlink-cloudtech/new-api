@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "new-api.fullname" . }}
+  labels:
+    {{- include "new-api.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "new-api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "new-api.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "new-api.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "new-api.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --log-dir
+            - /app/logs
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: TZ
+              value: {{ .Values.config.tz | quote }}
+            - name: ERROR_LOG_ENABLED
+              value: {{ .Values.config.errorLogEnabled | quote }}
+            - name: BATCH_UPDATE_ENABLED
+              value: {{ .Values.config.batchUpdateEnabled | quote }}
+            {{- if .Values.config.nodeName }}
+            - name: NODE_NAME
+              value: {{ .Values.config.nodeName | quote }}
+            {{- end }}
+            {{- if .Values.config.streamingTimeout }}
+            - name: STREAMING_TIMEOUT
+              value: {{ .Values.config.streamingTimeout | quote }}
+            {{- end }}
+            {{- if .Values.config.syncFrequency }}
+            - name: SYNC_FREQUENCY
+              value: {{ .Values.config.syncFrequency | quote }}
+            {{- end }}
+            # Sensitive values from Secret
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "new-api.secretName" . }}
+                  key: SESSION_SECRET
+                  optional: true
+            - name: SQL_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "new-api.secretName" . }}
+                  key: SQL_DSN
+                  optional: true
+            - name: REDIS_CONN_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "new-api.secretName" . }}
+                  key: REDIS_CONN_STRING
+                  optional: true
+            {{- with .Values.config.extraEnvVars }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "new-api.pvcName" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: logs
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
